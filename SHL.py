@@ -50,7 +50,7 @@ def search_assessments(query):
 
             results.append({
                 "name": item["name"],
-                "url": item["url"],
+                "url": item["link"],
                 "test_type": item.get("test_type", "General")
             })
 
