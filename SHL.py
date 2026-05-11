@@ -60,33 +60,34 @@ def search_assessments(query):
 @app.post("/chat")
 def chat(data: ChatRequest):
 
-    latest_message = get_latest_user_message(data.messages)
+    try:
+        latest_message = get_latest_user_message(data.messages)
+        if not latest_message:
+            return {
+                "reply": "Please provide hiring requirements.",
+                "recommendations": [],
+                "end_of_conversation": False
+            }
 
-    if len(latest_message.split()) < 3:
-
+        if len(latest_message.split()) < 3:
+            return {
+                "reply": (
+                    "Please provide role, skills, "
+                    "or experience level."
+                ),
+                "recommendations": [],
+                "end_of_conversation": False
+            }
+        recommendations = search_assessments(latest_message)
         return {
-            "reply": (
-                "Please provide role, skills, or experience "
-                "level for better recommendations."
-            ),
-            "recommendations": [],
+            "reply": "Here are recommended SHL assessments.",
+            "recommendations": recommendations,
             "end_of_conversation": False
         }
 
-    recommendations = search_assessments(latest_message)
-
-    if not recommendations:
-
+    except Exception as e:
         return {
-            "reply": (
-                "No matching SHL assessments found."
-            ),
+            "reply": f"Internal error: {str(e)}",
             "recommendations": [],
             "end_of_conversation": False
         }
-
-    return {
-        "reply": "Here are some recommended SHL assessments.",
-        "recommendations": recommendations,
-        "end_of_conversation": False
-    }
