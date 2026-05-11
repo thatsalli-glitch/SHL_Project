@@ -1,21 +1,12 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
-from sentence_transformers import SentenceTransformer
-import faiss
-import numpy as np
 import json
 
 app = FastAPI()
 
-# load embedding model
-model = SentenceTransformer("all-MiniLM-L6-v2")
-
-# load saved catalog
+# load catalog
 with open("catalog.json", "r", encoding="utf-8") as file:
     catalog = json.load(file)
-
-# load vector index
-index = faiss.read_index("shl_index.bin")
 
 
 class Message(BaseModel):
@@ -27,59 +18,43 @@ class ChatRequest(BaseModel):
     messages: list[Message]
 
 
+@app.get("/")
+def root():
+    return {"message": "API Running"}
+
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
 
 
 def get_latest_user_message(messages):
+
     for msg in reversed(messages):
+
         if msg.role == "user":
-            return msg.content
+            return msg.content.lower()
+
     return ""
 
 
-def query_is_vague(text):
-    vague_words = [
-        "assessment",
-        "test",
-        "hire someone",
-        "need hiring test"
-    ]
-
-    text = text.lower()
-
-    for word in vague_words:
-        if word in text:
-            return True
-
-    return False
-
-
-def search_assessments(user_query, top_k=5):
-
-    query_vector = model.encode([user_query])
-
-    distances, indexes = index.search(
-        np.array(query_vector),
-        top_k
-    )
+def search_assessments(query):
 
     results = []
 
-    for idx in indexes[0]:
+    for item in catalog:
 
-        if idx < len(catalog):
+        name = item.get("name", "").lower()
 
-            item = catalog[idx]
+        if any(word in name for word in query.split()):
 
             results.append({
                 "name": item["name"],
-                "url": item["link"],
+                "url": item["url"],
                 "test_type": item.get("test_type", "General")
             })
 
-    return results
+    return results[:5]
 
 
 @app.post("/chat")
@@ -87,55 +62,31 @@ def chat(data: ChatRequest):
 
     latest_message = get_latest_user_message(data.messages)
 
-    # clarification handling
-    if query_is_vague(latest_message):
+    if len(latest_message.split()) < 3:
 
         return {
             "reply": (
-                "Can you tell me the role, "
-                "experience level, or important skills "
-                "for the candidate?"
+                "Please provide role, skills, or experience "
+                "level for better recommendations."
             ),
             "recommendations": [],
             "end_of_conversation": False
         }
-
-    # comparison handling
-    if "difference" in latest_message.lower():
-
-        return {
-            "reply": (
-                "OPQ mainly measures personality and "
-                "behavior at work, while GSA focuses "
-                "more on cognitive and reasoning ability."
-            ),
-            "recommendations": [],
-            "end_of_conversation": False
-        }
-
-    # off-topic handling
-    blocked_topics = [
-        "legal advice",
-        "politics",
-        "medical"
-    ]
-
-    for topic in blocked_topics:
-        if topic in latest_message.lower():
-
-            return {
-                "reply": (
-                    "I can only help with SHL assessment "
-                    "recommendations."
-                ),
-                "recommendations": [],
-                "end_of_conversation": True
-            }
 
     recommendations = search_assessments(latest_message)
 
+    if not recommendations:
+
+        return {
+            "reply": (
+                "No matching SHL assessments found."
+            ),
+            "recommendations": [],
+            "end_of_conversation": False
+        }
+
     return {
-        "reply": "These assessments may fit your requirements.",
+        "reply": "Here are some recommended SHL assessments.",
         "recommendations": recommendations,
         "end_of_conversation": False
     }
