@@ -17,6 +17,19 @@ class Message(BaseModel):
 class ChatRequest(BaseModel):
     messages: list[Message]
 
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": "Hiring a Java developer"
+                    }
+                ]
+            }
+        }
+    }
+
 
 @app.get("/")
 def root():
